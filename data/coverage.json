@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "mcp": "czech-cybersecurity-mcp",
+  "authority": "NUKIB (Národní úřad pro kybernetickou a informační bezpečnost)",
+  "authority_url": "https://www.nukib.cz/",
+  "sources": [
+    {
+      "id": "nukib-guidance",
+      "name": "NUKIB Guidance Documents",
+      "table": "guidance",
+      "url": "https://www.nukib.cz/cs/kyberneticka-bezpecnost/",
+      "scope": "National cybersecurity guidelines, technical standards, recommendations, NIS2 implementation guidance",
+      "document_types": ["guideline", "standard", "recommendation", "regulation"],
+      "series": ["NUKIB", "NIS2", "ISMS"],
+      "license": "public_domain",
+      "retrieval_method": "crawler"
+    },
+    {
+      "id": "nukib-advisories",
+      "name": "NUKIB Security Advisories",
+      "table": "advisories",
+      "url": "https://www.nukib.cz/cs/infoservis/hrozby/",
+      "scope": "Security advisories, vulnerability alerts, threat intelligence, CVE references",
+      "severity_levels": ["critical", "high", "medium", "low"],
+      "license": "public_domain",
+      "retrieval_method": "crawler"
+    },
+    {
+      "id": "nukib-frameworks",
+      "name": "NUKIB Cybersecurity Frameworks",
+      "table": "frameworks",
+      "url": "https://www.nukib.cz/",
+      "scope": "National Cybersecurity Framework, ISMS guidance, NIS2 implementation framework",
+      "license": "public_domain",
+      "retrieval_method": "curated"
+    }
+  ],
+  "known_gaps": [
+    "Older archived NUKIB publications may not be included",
+    "Data may lag official publications by days to weeks",
+    "Coverage may be incomplete — not all NUKIB documents are ingested"
+  ]
+}
