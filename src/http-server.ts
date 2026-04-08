@@ -29,6 +29,7 @@ import {
   searchAdvisories,
   getAdvisory,
   listFrameworks,
+  getDataFreshness,
 } from "./db.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -53,11 +54,11 @@ const TOOLS = [
   {
     name: "cz_cyber_search_guidance",
     description:
-      "Full-text search across BSI guidelines and technical reports. Covers Technical Guidelines (TR series), IT-Grundschutz building blocks, BSI Standards, and recommendations.",
+      "Full-text search across NUKIB guidelines and technical standards. Covers national cybersecurity recommendations, NIS2 implementation guidance, ISMS standards, and critical infrastructure protection requirements. Returns matching documents with reference, title, series, and summary.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        query: { type: "string", description: "Search query (e.g., 'TLS Kryptographie', 'IT-Grundschutz Server')" },
+        query: { type: "string", description: "Search query (e.g., 'kybernetická bezpečnost', 'NIS2', 'ISMS', 'kryptografie')" },
         type: {
           type: "string",
           enum: ["guideline", "standard", "recommendation", "regulation"],
@@ -66,7 +67,7 @@ const TOOLS = [
         series: {
           type: "string",
           enum: ["NUKIB", "NIS2", "ISMS"],
-          description: "Filter by BSI series. Optional.",
+          description: "Filter by framework series. Optional.",
         },
         status: {
           type: "string",
@@ -81,11 +82,11 @@ const TOOLS = [
   {
     name: "cz_cyber_get_guidance",
     description:
-      "Get a specific BSI guidance document by reference (e.g., 'BSI TR-03116', 'BSI-Standard 200-1', 'SYS.1.1').",
+      "Get a specific NUKIB guidance document by reference (e.g., 'NUKIB-REK-2024-01', 'NUKIB-GUIDE-2023-02').",
     inputSchema: {
       type: "object" as const,
       properties: {
-        reference: { type: "string", description: "BSI document reference" },
+        reference: { type: "string", description: "NUKIB document reference" },
       },
       required: ["reference"],
     },
@@ -93,11 +94,11 @@ const TOOLS = [
   {
     name: "cz_cyber_search_advisories",
     description:
-      "Search BSI security advisories and alerts. Returns advisories with severity, affected products, and CVE references.",
+      "Search NUKIB security advisories and alerts. Returns advisories with severity, affected products, and CVE references where available.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        query: { type: "string", description: "Search query (e.g., 'kritische Schwachstelle', 'Ransomware')" },
+        query: { type: "string", description: "Search query (e.g., 'kritická zranitelnost', 'ransomware', 'VPN')" },
         severity: {
           type: "string",
           enum: ["critical", "high", "medium", "low"],
@@ -110,11 +111,11 @@ const TOOLS = [
   },
   {
     name: "cz_cyber_get_advisory",
-    description: "Get a specific BSI security advisory by reference (e.g., 'BSI-CB-K24-0001').",
+    description: "Get a specific NUKIB security advisory by reference (e.g., 'NUKIB-ADV-2024-001').",
     inputSchema: {
       type: "object" as const,
       properties: {
-        reference: { type: "string", description: "BSI advisory reference" },
+        reference: { type: "string", description: "NUKIB advisory reference" },
       },
       required: ["reference"],
     },
@@ -122,12 +123,24 @@ const TOOLS = [
   {
     name: "cz_cyber_list_frameworks",
     description:
-      "List all BSI frameworks and standard series covered in this MCP.",
+      "List all NUKIB frameworks and standard series covered in this MCP, including National Cybersecurity Framework, NIS2 implementation, and ISMS guidance.",
     inputSchema: { type: "object" as const, properties: {}, required: [] },
   },
   {
     name: "cz_cyber_about",
     description: "Return metadata about this MCP server: version, data source, coverage, and tool list.",
+    inputSchema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "cz_cyber_list_sources",
+    description:
+      "List all data sources used by this server with provenance metadata. Returns source name, authority, URL, scope, license, and record counts.",
+    inputSchema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "cz_cyber_check_data_freshness",
+    description:
+      "Check data freshness for each source. Reports record counts and the most recent document date to help identify stale data.",
     inputSchema: { type: "object" as const, properties: {}, required: [] },
   },
 ];
@@ -136,8 +149,8 @@ const TOOLS = [
 
 const SearchGuidanceArgs = z.object({
   query: z.string().min(1),
-  type: z.enum(["technical_guideline", "it_grundschutz", "standard", "recommendation"]).optional(),
-  series: z.enum(["TR", "IT-Grundschutz", "BSI-Standard"]).optional(),
+  type: z.enum(["guideline", "standard", "recommendation", "regulation"]).optional(),
+  series: z.enum(["NUKIB", "NIS2", "ISMS"]).optional(),
   status: z.enum(["current", "superseded", "draft"]).optional(),
   limit: z.number().int().positive().max(100).optional(),
 });
@@ -156,6 +169,15 @@ const GetAdvisoryArgs = z.object({
   reference: z.string().min(1),
 });
 
+// --- Meta block --------------------------------------------------------------
+
+const META = {
+  disclaimer:
+    "This data is provided for research purposes only and is not legal or regulatory advice. Verify all references against primary NUKIB sources before making compliance decisions.",
+  source_url: "https://www.nukib.cz/",
+  copyright: "Official NUKIB publications — Czech government public domain",
+};
+
 // --- MCP server factory ------------------------------------------------------
 
 function createMcpServer(): Server {
@@ -172,8 +194,11 @@ function createMcpServer(): Server {
     const { name, arguments: args = {} } = request.params;
 
     function textContent(data: unknown) {
+      const payload = typeof data === "object" && data !== null
+        ? { ...data as object, _meta: META }
+        : { data, _meta: META };
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
       };
     }
 
@@ -236,9 +261,70 @@ function createMcpServer(): Server {
             name: SERVER_NAME,
             version: pkgVersion,
             description:
-              "BSI (NUKIB (Národní úřad pro kybernetickou a informační bezpečnost)) MCP server. Provides access to BSI technical guidelines, IT-Grundschutz building blocks, BSI Standards, and security advisories.",
-            data_source: "BSI (https://www.bsi.bund.de/)",
+              "NUKIB (Národní úřad pro kybernetickou a informační bezpečnost — Czech National Cyber and Information Security Agency) MCP server. Provides access to NUKIB guidelines, technical standards, NIS2 implementation guidance, and security advisories.",
+            data_source: "NUKIB (https://www.nukib.cz/)",
+            coverage: {
+              guidance: "NUKIB technical guidelines, recommendations, NIS2 implementation standards",
+              advisories: "NUKIB security advisories and vulnerability alerts",
+              frameworks: "National Cybersecurity Framework, NIS2, ISMS guidance",
+            },
             tools: TOOLS.map((t) => ({ name: t.name, description: t.description })),
+          });
+        }
+
+        case "cz_cyber_list_sources": {
+          return textContent({
+            sources: [
+              {
+                id: "nukib-guidance",
+                name: "NUKIB Guidance Documents",
+                authority: "NUKIB (Národní úřad pro kybernetickou a informační bezpečnost)",
+                url: "https://www.nukib.cz/cs/kyberneticka-bezpecnost/",
+                scope: "Czech national cybersecurity guidelines, technical standards, recommendations, NIS2 implementation guidance",
+                license: "Public domain — official Czech government publications",
+                retrieval: "Periodic ingestion via NUKIB website crawler",
+              },
+              {
+                id: "nukib-advisories",
+                name: "NUKIB Security Advisories",
+                authority: "NUKIB (Národní úřad pro kybernetickou a informační bezpečnost)",
+                url: "https://www.nukib.cz/cs/infoservis/hrozby/",
+                scope: "Security advisories, vulnerability alerts, threat intelligence, CVE references",
+                license: "Public domain — official Czech government publications",
+                retrieval: "Periodic ingestion via NUKIB website crawler",
+              },
+              {
+                id: "nukib-frameworks",
+                name: "NUKIB Cybersecurity Frameworks",
+                authority: "NUKIB (Národní úřad pro kybernetickou a informační bezpečnost)",
+                url: "https://www.nukib.cz/",
+                scope: "National Cybersecurity Framework, ISMS guidance, NIS2 implementation framework",
+                license: "Public domain — official Czech government publications",
+                retrieval: "Curated metadata — framework series index",
+              },
+            ],
+          });
+        }
+
+        case "cz_cyber_check_data_freshness": {
+          const freshness = getDataFreshness();
+          const staleThresholdDays = 30;
+          const now = new Date();
+          const results = freshness.map((f) => {
+            let staleness: string;
+            if (!f.latest_date) {
+              staleness = "no_data";
+            } else {
+              const latest = new Date(f.latest_date);
+              const diffDays = Math.floor((now.getTime() - latest.getTime()) / (1000 * 60 * 60 * 24));
+              staleness = diffDays > staleThresholdDays ? "stale" : "ok";
+            }
+            return { ...f, staleness };
+          });
+          return textContent({
+            checked_at: now.toISOString(),
+            stale_threshold_days: staleThresholdDays,
+            sources: results,
           });
         }
 
