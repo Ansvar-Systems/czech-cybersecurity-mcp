@@ -26,6 +26,7 @@ import {
   searchAdvisories,
   getAdvisory,
   listFrameworks,
+  getDataFreshness,
 } from "./db.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -153,6 +154,26 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "cz_cyber_list_sources",
+    description:
+      "List all data sources used by this server with provenance metadata. Returns source name, authority, URL, scope, license, and record counts.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "cz_cyber_check_data_freshness",
+    description:
+      "Check data freshness for each source. Reports record counts and the most recent document date to help identify stale data.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 // --- Zod schemas for argument validation --------------------------------------
@@ -179,12 +200,24 @@ const GetAdvisoryArgs = z.object({
   reference: z.string().min(1),
 });
 
+// --- Meta block ---------------------------------------------------------------
+
+const META = {
+  disclaimer:
+    "This data is provided for research purposes only and is not legal or regulatory advice. Verify all references against primary NUKIB sources before making compliance decisions.",
+  source_url: "https://www.nukib.cz/",
+  copyright: "Official NUKIB publications — Czech government public domain",
+};
+
 // --- Helper ------------------------------------------------------------------
 
 function textContent(data: unknown) {
+  const payload = typeof data === "object" && data !== null
+    ? { ...data as object, _meta: META }
+    : { data, _meta: META };
   return {
     content: [
-      { type: "text" as const, text: JSON.stringify(data, null, 2) },
+      { type: "text" as const, text: JSON.stringify(payload, null, 2) },
     ],
   };
 }
@@ -270,6 +303,62 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             frameworks: "National Cybersecurity Framework, NIS2, ISMS guidance",
           },
           tools: TOOLS.map((t) => ({ name: t.name, description: t.description })),
+        });
+      }
+
+      case "cz_cyber_list_sources": {
+        return textContent({
+          sources: [
+            {
+              id: "nukib-guidance",
+              name: "NUKIB Guidance Documents",
+              authority: "NUKIB (Národní úřad pro kybernetickou a informační bezpečnost)",
+              url: "https://www.nukib.cz/cs/kyberneticka-bezpecnost/",
+              scope: "Czech national cybersecurity guidelines, technical standards, recommendations, NIS2 implementation guidance",
+              license: "Public domain — official Czech government publications",
+              retrieval: "Periodic ingestion via NUKIB website crawler",
+            },
+            {
+              id: "nukib-advisories",
+              name: "NUKIB Security Advisories",
+              authority: "NUKIB (Národní úřad pro kybernetickou a informační bezpečnost)",
+              url: "https://www.nukib.cz/cs/infoservis/hrozby/",
+              scope: "Security advisories, vulnerability alerts, threat intelligence, CVE references",
+              license: "Public domain — official Czech government publications",
+              retrieval: "Periodic ingestion via NUKIB website crawler",
+            },
+            {
+              id: "nukib-frameworks",
+              name: "NUKIB Cybersecurity Frameworks",
+              authority: "NUKIB (Národní úřad pro kybernetickou a informační bezpečnost)",
+              url: "https://www.nukib.cz/",
+              scope: "National Cybersecurity Framework, ISMS guidance, NIS2 implementation framework",
+              license: "Public domain — official Czech government publications",
+              retrieval: "Curated metadata — framework series index",
+            },
+          ],
+        });
+      }
+
+      case "cz_cyber_check_data_freshness": {
+        const freshness = getDataFreshness();
+        const staleThresholdDays = 30;
+        const now = new Date();
+        const results = freshness.map((f) => {
+          let staleness: string;
+          if (!f.latest_date) {
+            staleness = "no_data";
+          } else {
+            const latest = new Date(f.latest_date);
+            const diffDays = Math.floor((now.getTime() - latest.getTime()) / (1000 * 60 * 60 * 24));
+            staleness = diffDays > staleThresholdDays ? "stale" : "ok";
+          }
+          return { ...f, staleness };
+        });
+        return textContent({
+          checked_at: now.toISOString(),
+          stale_threshold_days: staleThresholdDays,
+          sources: results,
         });
       }
 

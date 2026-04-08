@@ -1,5 +1,5 @@
 /**
- * SQLite database access layer for the German Cybersecurity (BSI) MCP server.
+ * SQLite database access layer for the Czech Cybersecurity (NUKIB) MCP server.
  *
  * Schema:
  *   - guidance    — NUKIB guidelines, technical standards, and recommendations
@@ -260,4 +260,26 @@ export function listFrameworks(): Framework[] {
   return db
     .prepare("SELECT * FROM frameworks ORDER BY id")
     .all() as Framework[];
+}
+
+// --- Freshness queries --------------------------------------------------------
+
+export interface DataFreshness {
+  table: string;
+  count: number;
+  latest_date: string | null;
+}
+
+export function getDataFreshness(): DataFreshness[] {
+  const db = getDb();
+  const guidance = db
+    .prepare("SELECT COUNT(*) AS count, MAX(date) AS latest_date FROM guidance")
+    .get() as { count: number; latest_date: string | null };
+  const advisories = db
+    .prepare("SELECT COUNT(*) AS count, MAX(date) AS latest_date FROM advisories")
+    .get() as { count: number; latest_date: string | null };
+  return [
+    { table: "guidance", count: guidance.count, latest_date: guidance.latest_date },
+    { table: "advisories", count: advisories.count, latest_date: advisories.latest_date },
+  ];
 }

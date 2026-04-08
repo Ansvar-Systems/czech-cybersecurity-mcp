@@ -90,16 +90,20 @@ npx @ansvar/czech-cybersecurity-mcp
 
 ---
 
-## Available Tools (6)
+## Available Tools (8)
 
 | Tool | Description |
 |------|-------------|
-| `cz_cyber_search_guidance` | Full-text search across NUKIB guidelines and technical standards. Covers national cybersecurity recommendations, NIS2... |
-| `cz_cyber_get_guidance` | Get a specific NUKIB guidance document by reference (e.g., |
-| `cz_cyber_search_advisories` | Search NUKIB security advisories and alerts. Returns advisories with severity, affected products, and CVE references ... |
-| `cz_cyber_get_advisory` | Get a specific NUKIB security advisory by reference (e.g., |
-| `cz_cyber_list_frameworks` | List all NUKIB frameworks and standard series covered in this MCP, including National Cybersecurity Framework, NIS2 i... |
+| `cz_cyber_search_guidance` | Full-text search across NUKIB guidelines and technical standards (NIS2, ISMS, recommendations). |
+| `cz_cyber_get_guidance` | Get a specific NUKIB guidance document by reference (e.g., `NUKIB-REK-2024-01`). |
+| `cz_cyber_search_advisories` | Search NUKIB security advisories and alerts with severity and CVE references. |
+| `cz_cyber_get_advisory` | Get a specific NUKIB security advisory by reference (e.g., `NUKIB-ADV-2024-001`). |
+| `cz_cyber_list_frameworks` | List all NUKIB frameworks and standard series covered in this MCP. |
 | `cz_cyber_about` | Return metadata about this MCP server: version, data source, coverage, and tool list. |
+| `cz_cyber_list_sources` | List all data sources with provenance metadata (authority, URL, scope, license). |
+| `cz_cyber_check_data_freshness` | Check data freshness — reports record counts and most recent document dates. |
+
+See [TOOLS.md](TOOLS.md) for full parameter documentation.
 
 All tools return structured data with source references and timestamps.
 
@@ -117,7 +121,7 @@ All content is sourced from official Czech regulatory publications:
 - Freshness checks run via GitHub Actions workflows
 - Last-updated timestamps in tool responses indicate data age
 
-See `sources.yml` for full provenance metadata.
+See [COVERAGE.md](COVERAGE.md) and [data/coverage.json](data/coverage.json) for full provenance metadata.
 
 ---
 
@@ -167,21 +171,20 @@ git clone https://github.com/Ansvar-Systems/czech-cybersecurity-mcp
 cd czech-cybersecurity-mcp
 npm install
 npm run build
-npm test
 ```
 
 ### Running Locally
 
 ```bash
-npm run dev                                       # Start MCP server
-npx @anthropic/mcp-inspector node dist/index.js   # Test with MCP Inspector
+npm run dev                                       # Start MCP server (HTTP)
+npx @anthropic/mcp-inspector node dist/src/index.js   # Test with MCP Inspector
 ```
 
 ### Data Management
 
 ```bash
-npm run build:db       # Rebuild SQLite database from seed data
-npm run check-updates  # Check for new regulatory data
+npm run seed    # Seed sample data into SQLite database
+npm run ingest  # Ingest latest data from NUKIB
 ```
 
 ---
@@ -218,7 +221,7 @@ Apache License 2.0. See [LICENSE](./LICENSE) for details.
 
 ### Data Licenses
 
-Regulatory data sourced from official government publications. See `sources.yml` for per-source licensing details.
+Regulatory data sourced from official government publications. See [COVERAGE.md](COVERAGE.md) for per-source licensing details.
 
 ---
 
